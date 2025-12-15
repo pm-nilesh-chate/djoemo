@@ -4,6 +4,8 @@ import (
 	"context"
 )
 
+//go:generate mockgen -source=dynamo_repository_interface.go -destination=./mock/dynamo_repository_interface.go -package=mock .
+
 // RepositoryInterface provides an interface to enable mocking the AWS dynamodb repository
 // for testing your code.
 type RepositoryInterface interface {
@@ -109,4 +111,9 @@ type RepositoryInterface interface {
 
 	//ConditionalUpdate updates an item if the passed expression and condition evaluates to true
 	ConditionalUpdate(key KeyInterface, item interface{}, expression string, expressionArgs ...interface{}) (bool, error)
+
+	// BatchGetItemsWithContext gets multiple items by their keys; it accepts a slice of keys (all from the same table)
+	// and fills out (pointer to a slice) with any found items.
+	// returns true if at least one item is found, returns false and nil if no items found, returns false and error in case of error
+	BatchGetItemsWithContext(ctx context.Context, keys []KeyInterface, out interface{}) (bool, error)
 }

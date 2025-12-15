@@ -4,6 +4,8 @@ import (
 	"context"
 )
 
+//go:generate mockgen -source=dynamo_global_index_interface.go -destination=./mock/dynamo_global_index_interface.go -package=mock .
+
 type GlobalIndexInterface interface {
 	// GetItemWithContext get item from index; it accepts a key interface that is used to get the table name, hash key and range key if it exists;
 	// context which used to enable log with context; the output will be given in item
