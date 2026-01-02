@@ -19,10 +19,10 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.23.0'
+        go-version: '1.26.0'
 
     - name: Install Ginkgo
-      run: go install github.com/onsi/ginkgo/v2/ginkgo@v2.25.1
+      run: go install github.com/onsi/ginkgo/v2/ginkgo@v2.27.5
 
     - name: Vendor
       run: go mod tidy; go mod vendor
