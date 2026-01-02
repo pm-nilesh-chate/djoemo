@@ -2,15 +2,18 @@ package djoemo_test
 
 import (
 	"context"
+	"github.com/adjoeio/djoemo/model"
 	"time"
 
-	"github.com/bouk/monkey"
 	"github.com/pkg/errors"
 	"go.uber.org/mock/gomock"
 
+	"github.com/adjoeio/djoemo"
+	metricsModel "github.com/adjoeio/djoemo/metrics/model"
 	"github.com/adjoeio/djoemo/mock"
 
-	. "github.com/adjoeio/djoemo"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("Repository", func() {
@@ -20,7 +23,7 @@ var _ = Describe("Repository", func() {
 
 	var (
 		dMock       mock.DynamoMock
-		repository  RepositoryInterface
+		repository  djoemo.RepositoryInterface
 		logMock     *mock.MockLogInterface
 		metricsMock *mock.MockMetricsInterface
 	)
@@ -31,41 +34,41 @@ var _ = Describe("Repository", func() {
 		logMock = mock.NewMockLogInterface(mockCtrl)
 		metricsMock = mock.NewMockMetricsInterface(mockCtrl)
 		dMock = mock.NewDynamoMock(dAPIMock)
-		repository = NewRepository(dAPIMock)
+		repository = djoemo.NewRepository(dAPIMock)
 	})
 
 	Describe("SaveItem", func() {
 		Describe("SaveItem invalid key ", func() {
 			It("should fail with table name is nil", func() {
-				key := Key().WithHashKeyName("UUID").WithHashKey("uuid")
+				key := djoemo.Key().WithHashKeyName("UUID").WithHashKey("uuid")
 				user := &User{
 					UUID: "uuid",
 				}
-				err := repository.SaveItem(key, user)
-				Expect(err).To(BeEqualTo(ErrInvalidTableName))
+				err := repository.SaveItemWithContext(context.Background(), key, user)
+				Expect(err).To(Equal(djoemo.ErrInvalidTableName))
 			})
 			It("should fail with hash key name is nil", func() {
-				key := Key().WithTableName(UserTableName).WithHashKey("uuid")
+				key := djoemo.Key().WithTableName(UserTableName).WithHashKey("uuid")
 				user := &User{
 					UUID: "uuid",
 				}
-				err := repository.SaveItem(key, user)
+				err := repository.SaveItemWithContext(context.Background(), key, user)
 
-				Expect(err).To(BeEqualTo(ErrInvalidHashKeyName))
+				Expect(err).To(Equal(djoemo.ErrInvalidHashKeyName))
 			})
 			It("should fail with hash key value is nil", func() {
-				key := Key().WithTableName(UserTableName).WithHashKeyName("UUID")
+				key := djoemo.Key().WithTableName(UserTableName).WithHashKeyName("UUID")
 				user := &User{
 					UUID: "uuid",
 				}
-				err := repository.SaveItem(key, user)
+				err := repository.SaveItemWithContext(context.Background(), key, user)
 
-				Expect(err).To(BeEqualTo(ErrInvalidHashKeyValue))
+				Expect(err).To(Equal(djoemo.ErrInvalidHashKeyValue))
 			})
 		})
 
 		It("should save item", func() {
-			key := Key().WithTableName(UserTableName).
+			key := djoemo.Key().WithTableName(UserTableName).
 				WithHashKeyName("UUID").
 				WithHashKey("uuid")
 
@@ -86,7 +89,7 @@ var _ = Describe("Repository", func() {
 				UUID:     "uuid",
 				UserName: "name1",
 			}
-			err := repository.SaveItem(key, user)
+			err := repository.SaveItemWithContext(context.Background(), key, user)
 
 			Expect(err).To(BeNil())
 		})
@@ -94,7 +97,7 @@ var _ = Describe("Repository", func() {
 	Describe("SaveItems", func() {
 		Describe("SaveItem invalid key ", func() {
 			It("should fail with table name is nil", func() {
-				key := Key().WithHashKeyName("UUID").WithHashKey("uuid")
+				key := djoemo.Key().WithHashKeyName("UUID").WithHashKey("uuid")
 				users := []User{
 					{
 						UUID: "uuid1",
@@ -103,11 +106,11 @@ var _ = Describe("Repository", func() {
 						UUID: "uuid2",
 					},
 				}
-				err := repository.SaveItems(key, users)
-				Expect(err).To(BeEqualTo(ErrInvalidTableName))
+				err := repository.SaveItemsWithContext(context.Background(), key, users)
+				Expect(err).To(Equal(djoemo.ErrInvalidTableName))
 			})
 			It("should fail with hash key name is nil", func() {
-				key := Key().WithTableName(UserTableName).WithHashKey("uuid")
+				key := djoemo.Key().WithTableName(UserTableName).WithHashKey("uuid")
 				users := []User{
 					{
 						UUID: "uuid1",
@@ -116,12 +119,12 @@ var _ = Describe("Repository", func() {
 						UUID: "uuid2",
 					},
 				}
-				err := repository.SaveItems(key, users)
+				err := repository.SaveItemsWithContext(context.Background(), key, users)
 
-				Expect(err).To(BeEqualTo(ErrInvalidHashKeyName))
+				Expect(err).To(Equal(djoemo.ErrInvalidHashKeyName))
 			})
 			It("should fail with hash key value is nil", func() {
-				key := Key().WithTableName(UserTableName).WithHashKeyName("UUID")
+				key := djoemo.Key().WithTableName(UserTableName).WithHashKeyName("UUID")
 				users := []User{
 					{
 						UUID: "uuid1",
@@ -130,14 +133,14 @@ var _ = Describe("Repository", func() {
 						UUID: "uuid2",
 					},
 				}
-				err := repository.SaveItems(key, users)
+				err := repository.SaveItemsWithContext(context.Background(), key, users)
 
-				Expect(err).To(BeEqualTo(ErrInvalidHashKeyValue))
+				Expect(err).To(Equal(djoemo.ErrInvalidHashKeyValue))
 			})
 		})
 
 		It("should save items", func() {
-			key := Key().WithTableName(UserTableName).
+			key := djoemo.Key().WithTableName(UserTableName).
 				WithHashKeyName("UUID").
 				WithHashKey("uuid").
 				WithRangeKeyName("UserName")
@@ -173,12 +176,12 @@ var _ = Describe("Repository", func() {
 					UserName: "name2",
 				},
 			}
-			err := repository.SaveItems(key, users)
+			err := repository.SaveItemsWithContext(context.Background(), key, users)
 			Expect(err).To(BeNil())
 		})
 
 		It("should fail when not pass slice", func() {
-			key := Key().WithTableName(UserTableName).
+			key := djoemo.Key().WithTableName(UserTableName).
 				WithHashKeyName("UUID").
 				WithHashKey("uuid").
 				WithRangeKeyName("UserName")
@@ -187,12 +190,12 @@ var _ = Describe("Repository", func() {
 				UUID:     "uuid1",
 				UserName: "name1",
 			}
-			err := repository.SaveItems(key, users)
-			Expect(err).To(BeEqualTo(ErrInvalidSliceType))
+			err := repository.SaveItemsWithContext(context.Background(), key, users)
+			Expect(err).To(Equal(djoemo.ErrInvalidSliceType))
 		})
 
 		It("should return in err in case of db err", func() {
-			key := Key().WithTableName(UserTableName).
+			key := djoemo.Key().WithTableName(UserTableName).
 				WithHashKeyName("UUID").
 				WithHashKey("uuid").
 				WithRangeKeyName("UserName")
@@ -229,24 +232,28 @@ var _ = Describe("Repository", func() {
 					UserName: "name2",
 				},
 			}
-			ret := repository.SaveItems(key, users)
-			Expect(ret).To(BeEqualTo(err))
+			ret := repository.SaveItemsWithContext(context.Background(), key, users)
+			Expect(ret).To(Equal(err))
 		})
 	})
 
 	Describe("Optimistic Lock Save", func() {
-		It("should save an item with optimistic Locking", func() {
+		var djoemoTimeNow = djoemo.DjoemoTimeNow
+		BeforeEach(func() {
 			now := time.Date(2019, 1, 1, 12, 15, 0, 0, time.UTC)
-
-			monkey.Patch(time.Now, func() time.Time {
-				return now
-			})
-
+			djoemo.DjoemoTimeNow = func() djoemo.DjoemoTime {
+				return djoemo.DjoemoTime{Time: now}
+			}
+		})
+		AfterEach(func() {
+			djoemo.DjoemoTimeNow = djoemoTimeNow
+		})
+		It("should save an item with optimistic Locking", func() {
 			type DjoemoUser struct {
-				Model
+				djoemo.Model
 				User
 			}
-			key := Key().WithTableName(UserTableName).
+			key := djoemo.Key().WithTableName(UserTableName).
 				WithHashKeyName("UUID").
 				WithHashKey("uuid")
 
@@ -281,7 +288,7 @@ var _ = Describe("Repository", func() {
 
 	Describe("Log", func() {
 		It("should log with extra fields if log is supported", func() {
-			key := Key().WithTableName(UserTableName).
+			key := djoemo.Key().WithTableName(UserTableName).
 				WithHashKeyName("UUID").
 				WithHashKey("uuid")
 
@@ -304,19 +311,23 @@ var _ = Describe("Repository", func() {
 				UserName: "name1",
 			}
 
-			logMock.EXPECT().WithContext(context.TODO()).Return(logMock)
 			repository.WithLog(logMock)
-			logMock.EXPECT().WithFields(map[string]interface{}{"TableName": key.TableName()}).Return(logMock)
+			logMock.EXPECT().WithField(djoemo.TableName, key.TableName()).Return(logMock)
+			logMock.EXPECT().WithContext(gomock.Any()).Return(logMock)
 			logMock.EXPECT().Error(err.Error())
-			ret := repository.SaveItem(key, user)
+
+			repository.WithMetrics(metricsMock)
+			metricsMock.EXPECT().Record(gomock.Any(), metricsModel.OpCommit, key, gomock.Any(), &err)
+
+			ret := repository.SaveItemWithContext(context.Background(), key, user)
 			Expect(ret).To(BeEquivalentTo(err))
 		})
 	})
 
 	Describe("Metrics", func() {
 		Describe("SaveItem", func() {
-			It("should publish metrics if metric is supported", func() {
-				key := Key().WithTableName(UserTableName).
+			It("should record metrics if metric is supported", func() {
+				key := djoemo.Key().WithTableName(UserTableName).
 					WithHashKeyName("UUID").
 					WithHashKey("uuid")
 
@@ -339,54 +350,16 @@ var _ = Describe("Repository", func() {
 				}
 
 				repository.WithMetrics(metricsMock)
+				metricsMock.EXPECT().Record(gomock.Any(), metricsModel.OpCommit, key, gomock.Any(), gomock.Eq(new(error)))
 
-				metricsMock.EXPECT().WithContext(context.TODO()).Return(metricsMock)
-				metricsMock.EXPECT().Publish(key.TableName(), MetricNameSavedItemsCount, float64(1)).Return(nil)
-				err := repository.SaveItem(key, user)
-				Expect(err).To(BeNil())
-			})
-
-			It("should not affect save and log error if publish failed", func() {
-				key := Key().WithTableName(UserTableName).
-					WithHashKeyName("UUID").
-					WithHashKey("uuid")
-
-				userDBInput := map[string]interface{}{
-					"UUID":      "uuid",
-					"UserName":  "name1",
-					"UpdatedAt": "0001-01-01T00:00:00Z",
-					"CreatedAt": "0001-01-01T00:00:00Z",
-				}
-
-				dMock.Should().
-					Save(
-						dMock.WithTable(key.TableName()),
-						dMock.WithInput(userDBInput),
-					).Exec()
-
-				user := &User{
-					UUID:     "uuid",
-					UserName: "name1",
-				}
-
-				repository.WithMetrics(metricsMock)
-				repository.WithLog(logMock)
-
-				metricsMock.EXPECT().WithContext(context.TODO()).Return(metricsMock)
-				metricsMock.EXPECT().Publish(key.TableName(), MetricNameSavedItemsCount, float64(1)).
-					Return(errors.New("failed to publish"))
-				logMock.EXPECT().WithFields(map[string]interface{}{"TableName": key.TableName()}).Return(logMock)
-
-				logMock.EXPECT().WithContext(context.TODO()).Return(logMock)
-				logMock.EXPECT().Error("failed to publish")
-				err := repository.SaveItem(key, user)
+				err := repository.SaveItemWithContext(context.Background(), key, user)
 				Expect(err).To(BeNil())
 			})
 		})
 
 		Describe("SaveItems", func() {
-			It("should publish metrics if metric is supported", func() {
-				key := Key().WithTableName(UserTableName).
+			It("should record metrics with source label", func() {
+				key := djoemo.Key().WithTableName(UserTableName).
 					WithHashKeyName("UUID").
 					WithHashKey("uuid").
 					WithRangeKeyName("UserName")
@@ -423,62 +396,16 @@ var _ = Describe("Repository", func() {
 					},
 				}
 
-				traceInfo := map[string]interface{}{"TraceID": "trace-id", "UUID": "uuid"}
-				repository.WithMetrics(metricsMock)
-				metricsMock.EXPECT().WithContext(WithFields(traceInfo)).Return(metricsMock)
-				metricsMock.EXPECT().Publish(key.TableName(), MetricNameSavedItemsCount, float64(2)).Return(nil)
-				err := repository.SaveItemsWithContext(WithFields(traceInfo), key, users)
-
-				Expect(err).To(BeNil())
-			})
-
-			It("should not affect save and log error if publish failed", func() {
-				key := Key().WithTableName(UserTableName).
-					WithHashKeyName("UUID").
-					WithHashKey("uuid").
-					WithRangeKeyName("UserName")
-
-				userDBInput := []map[string]interface{}{
-					{
-						"UUID":      "uuid1",
-						"UserName":  "name1",
-						"UpdatedAt": "0001-01-01T00:00:00Z",
-						"CreatedAt": "0001-01-01T00:00:00Z",
-					},
-					{
-						"UUID":      "uuid2",
-						"UserName":  "name2",
-						"UpdatedAt": "0001-01-01T00:00:00Z",
-						"CreatedAt": "0001-01-01T00:00:00Z",
-					},
-				}
-
-				dMock.Should().
-					SaveAll(
-						dMock.WithTable(key.TableName()),
-						dMock.WithInputs(userDBInput),
-					).Exec()
-
-				users := []User{
-					{
-						UUID:     "uuid1",
-						UserName: "name1",
-					},
-					{
-						UUID:     "uuid2",
-						UserName: "name2",
-					},
-				}
+				ctx := metricsModel.WithSourceLabel(context.Background(), "FooBarAPI")
 
 				repository.WithMetrics(metricsMock)
-				repository.WithLog(logMock)
-				metricsMock.EXPECT().WithContext(context.TODO()).Return(metricsMock)
-				metricsMock.EXPECT().Publish(key.TableName(), MetricNameSavedItemsCount, float64(2)).
-					Return(errors.New("failed to publish"))
-				logMock.EXPECT().WithFields(map[string]interface{}{"TableName": key.TableName()}).Return(logMock)
-				logMock.EXPECT().WithContext(context.TODO()).Return(logMock)
-				logMock.EXPECT().Error("failed to publish")
-				err := repository.SaveItems(key, users)
+				metricsMock.EXPECT().Record(ctx, metricsModel.OpCommit, key, gomock.Any(), gomock.Eq(new(error))).
+					Do(func(ctx context.Context, caller string, key model.Key, duration time.Duration, err *error) {
+						Expect(ctx.Value(metricsModel.ContextKeySource)).To(Equal("FooBarAPI"))
+					})
+
+				err := repository.SaveItemsWithContext(ctx, key, users)
+
 				Expect(err).To(BeNil())
 			})
 		})

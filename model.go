@@ -20,13 +20,13 @@ func (m *Model) IncreaseVersion() {
 // InitCreatedAt sets the CreatedAt field of the item if it hasnt been set
 func (m *Model) InitCreatedAt() {
 	if m.CreatedAt == nil {
-		now := Now()
+		now := DjoemoTimeNow()
 		m.CreatedAt = &now
 	}
 }
 
-//InitUpdatedAt sets the UpdatedAt
+// InitUpdatedAt sets the UpdatedAt
 func (m *Model) InitUpdatedAt() {
-	now := Now()
+	now := DjoemoTimeNow()
 	m.UpdatedAt = &now
 }
