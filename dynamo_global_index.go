@@ -3,67 +3,75 @@ package djoemo
 import (
 	"context"
 	"reflect"
+	"time"
 
 	"github.com/guregu/dynamo"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // GlobalIndex models a global secondary index used in a query
 type GlobalIndex struct {
 	name         string
 	dynamoClient *dynamo.DB
-	log          logger
+	log          LogInterface
+	metrics      *Metrics
 }
 
-// GetItems by key; it accepts a key interface that is used to get the table name, hash key and range key if it exists; the output will be given in items
-// returns true if items are found, returns false and nil if no items found, returns false and error in case of error
-func (gi GlobalIndex) GetItems(key KeyInterface, items interface{}) (bool, error) {
-	return gi.GetItemsWithContext(context.TODO(), key, items)
+// WithLog enables logging; it accepts LogInterface as logger
+func (gi *GlobalIndex) WithLog(log LogInterface) {
+	gi.log = log
 }
 
-// GetItem get item; it accepts a key interface that is used to get the table name, hash key and range key if it exists; the output will be given in item
-// returns true if item is found, returns false and nil if no item found, returns false and an error in case of error
-func (gi GlobalIndex) GetItem(key KeyInterface, item interface{}) (bool, error) {
-	return gi.GetItemWithContext(context.TODO(), key, item)
+// WithMetrics enables metrics; it accepts MetricsInterface as metrics publisher
+func (gi *GlobalIndex) WithMetrics(metricsInterface MetricsInterface) {
+	gi.metrics.Add(metricsInterface)
+}
+
+// WithPrometheusMetrics enables prometheus metrics
+func (gi *GlobalIndex) WithPrometheusMetrics(registry *prometheus.Registry) GlobalIndexInterface {
+	prommetrics := NewPrometheusMetrics(registry)
+	gi.metrics.Add(prommetrics)
+	return gi
 }
 
 // GetItemWithContext item; it needs a key interface that is used to get the table name, hash key, and the range key if it exists; output will be contained in item; context is optional param, which used to enable log with context
-func (gi GlobalIndex) GetItemWithContext(ctx context.Context, key KeyInterface, item interface{}) (bool, error) {
+func (gi GlobalIndex) GetItemWithContext(ctx context.Context, key KeyInterface, item any) (bool, error) {
+	var err error
+	defer gi.recordMetrics(ctx, OpRead, key, err == nil)()
 
 	if err := isValidKey(key); err != nil {
-		gi.log.error(ctx, key.TableName(), err.Error())
 		return false, err
 	}
 
-	err := buildTableKeyCondition(gi.table(key.TableName()), key).Index(gi.name).OneWithContext(ctx, item)
+	err = buildTableKeyCondition(gi.table(key.TableName()), key).Index(gi.name).OneWithContext(ctx, item)
 	if err != nil {
 		if err == dynamo.ErrNotFound {
-			gi.log.info(ctx, key.TableName(), ErrNoItemFound.Error())
+			gi.log.WithContext(ctx).WithField(TableName, key.TableName()).Info(ErrNoItemFound.Error())
 			return false, nil
 		}
 
-		gi.log.error(ctx, key.TableName(), err.Error())
 		return false, err
 	}
 
 	return true, nil
-
 }
 
 // GetItemsWithContext queries multiple items by key (hash key) and returns it in the slice of items items
-func (gi GlobalIndex) GetItemsWithContext(ctx context.Context, key KeyInterface, items interface{}) (bool, error) {
+func (gi GlobalIndex) GetItemsWithContext(ctx context.Context, key KeyInterface, items any) (bool, error) {
+	var err error
+	defer gi.recordMetrics(ctx, OpRead, key, err == nil)()
+
 	if err := isValidKey(key); err != nil {
-		gi.log.error(ctx, key.TableName(), err.Error())
 		return false, err
 	}
 
-	err := gi.table(key.TableName()).Get(*key.HashKeyName(), key.HashKey()).Index(gi.name).AllWithContext(ctx, items)
+	err = gi.table(key.TableName()).Get(*key.HashKeyName(), key.HashKey()).Index(gi.name).AllWithContext(ctx, items)
 	if err != nil {
 		if err == dynamo.ErrNotFound {
-			gi.log.info(ctx, key.TableName(), ErrNoItemFound.Error())
+			gi.log.WithContext(ctx).WithField(TableName, key.TableName()).Info(ErrNoItemFound.Error())
 			return false, nil
 		}
 
-		gi.log.error(ctx, key.TableName(), err.Error())
 		return false, err
 	}
 
@@ -82,20 +90,21 @@ func (gi GlobalIndex) GetItemsWithContext(ctx context.Context, key KeyInterface,
 }
 
 // GetItemsWithRangeWithContext queries multiple items by key (hash key) and returns it in the slice of items respecting the range key
-func (gi GlobalIndex) GetItemsWithRangeWithContext(ctx context.Context, key KeyInterface, items interface{}) (bool, error) {
+func (gi GlobalIndex) GetItemsWithRangeWithContext(ctx context.Context, key KeyInterface, items any) (bool, error) {
+	var err error
+	defer gi.recordMetrics(ctx, OpRead, key, err == nil)()
+
 	if err := isValidKey(key); err != nil {
-		gi.log.error(ctx, key.TableName(), err.Error())
 		return false, err
 	}
 
-	err := buildTableKeyCondition(gi.table(key.TableName()), key).Index(gi.name).AllWithContext(ctx, items)
+	err = buildTableKeyCondition(gi.table(key.TableName()), key).Index(gi.name).AllWithContext(ctx, items)
 	if err != nil {
 		if err == dynamo.ErrNotFound {
-			gi.log.info(ctx, key.TableName(), ErrNoItemFound.Error())
+			gi.log.WithContext(ctx).WithField(TableName, key.TableName()).Info(ErrNoItemFound.Error())
 			return false, nil
 		}
 
-		gi.log.error(ctx, key.TableName(), err.Error())
 		return false, err
 	}
 
@@ -120,13 +129,14 @@ func (gi GlobalIndex) table(tableName string) dynamo.Table {
 // QueryWithContext by query; it accepts a query interface that is used to get the table name, hash key and range key with its operator if it exists;
 // context which used to enable log with context, the output will be given in items
 // returns error in case of error
-func (gi GlobalIndex) QueryWithContext(ctx context.Context, query QueryInterface, item interface{}) error {
+func (gi GlobalIndex) QueryWithContext(ctx context.Context, query QueryInterface, item any) error {
+	var err error
+	defer gi.recordMetrics(ctx, OpRead, query, err == nil)()
 
 	if !IsPointerOFSlice(item) {
 		return ErrInvalidPointerSliceType
 	}
 	if err := isValidKey(query); err != nil {
-		gi.log.error(ctx, query.TableName(), err.Error())
 		return err
 	}
 
@@ -145,17 +155,17 @@ func (gi GlobalIndex) QueryWithContext(ctx context.Context, query QueryInterface
 		q = q.Order(dynamo.Descending)
 	}
 
-	err := q.AllWithContext(ctx, item)
+	err = q.AllWithContext(ctx, item)
 	if err != nil {
-		gi.log.error(ctx, query.TableName(), err.Error())
 		return err
 	}
 
 	return nil
 }
 
-// Query by query; it accepts a query interface that is used to get the table name, hash key and range key with its operator if it exists;
-// returns error in case of error
-func (gi GlobalIndex) Query(query QueryInterface, item interface{}) error {
-	return gi.QueryWithContext(context.TODO(), query, item)
+func (gi GlobalIndex) recordMetrics(ctx context.Context, caller string, key KeyInterface, success bool) func() {
+	start := time.Now()
+	return func() {
+		gi.metrics.Record(ctx, caller, key, time.Since(start), success)
+	}
 }
