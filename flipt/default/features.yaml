@@ -10,7 +10,7 @@ flags:
     - key: f2
       name: f2
       type: VARIANT_FLAG_TYPE
-      enabled: false
+      enabled: true
       variants:
         - default: true
           key: k1
