@@ -1,0 +1,8 @@
+version: "1.6"
+namespace:
+    key: default
+    name: Default
+segments:
+    - key: s1
+      name: s1
+      match_type: ALL_MATCH_TYPE
