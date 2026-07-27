@@ -7,6 +7,10 @@ flags:
       name: f1
       type: BOOLEAN_FLAG_TYPE
       enabled: false
+    - key: f2
+      name: f2
+      type: VARIANT_FLAG_TYPE
+      enabled: false
 segments:
     - key: s1
       name: s1
