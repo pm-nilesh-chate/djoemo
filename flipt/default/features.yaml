@@ -2,6 +2,11 @@ version: "1.6"
 namespace:
     key: default
     name: Default
+flags:
+    - key: f1
+      name: f1
+      type: BOOLEAN_FLAG_TYPE
+      enabled: false
 segments:
     - key: s1
       name: s1
